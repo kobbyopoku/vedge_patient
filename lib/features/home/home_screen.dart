@@ -128,6 +128,19 @@ class HomeScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            // W5.6b — Teleconsult entry point.
+            //
+            // We deliberately chose the home-card approach instead of adding
+            // a 5th bottom-nav destination. Rationale: the existing shell has
+            // Home / Results / Visits / Me (4 tabs), and cramming a 5th tab
+            // crunches the labels on small Android devices which are our
+            // primary target audience. The home card keeps the surface risk
+            // low while the teleconsult feature bakes.
+            const SizedBox(height: 20),
+            _TeleconsultCard(
+              onBook: () => context.push('/teleconsult/browse'),
+              onSeeList: () => context.push('/teleconsult'),
+            ),
             const SizedBox(height: 20),
             Text('Quick actions', style: theme.textTheme.titleMedium),
             const SizedBox(height: 8),
@@ -298,6 +311,82 @@ class _InfoCard extends StatelessWidget {
               action!,
             ],
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Primary CTA for the teleconsult flow (W5.6b). Lives on the home screen
+/// as a dedicated card — see the comment at the call site for the routing
+/// rationale (home card vs bottom-nav entry).
+class _TeleconsultCard extends StatelessWidget {
+  const _TeleconsultCard({required this.onBook, required this.onSeeList});
+  final VoidCallback onBook;
+  final VoidCallback onSeeList;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    return Card(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onBook,
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: cs.primary.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(Icons.videocam_outlined,
+                        color: cs.primary, size: 28),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Book a video consult',
+                            style: theme.textTheme.titleMedium),
+                        const SizedBox(height: 2),
+                        Text(
+                          'See a doctor from home, pay once via Paystack.',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  TextButton.icon(
+                    onPressed: onSeeList,
+                    icon: const Icon(Icons.history, size: 18),
+                    label: const Text('See your consults'),
+                  ),
+                  FilledButton.icon(
+                    onPressed: onBook,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Book'),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

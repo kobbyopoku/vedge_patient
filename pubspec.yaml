@@ -31,6 +31,11 @@ dependencies:
   # Date / number formatting
   intl: ^0.19.0
 
+  # Used by the teleconsult flow (W5.6b) to launch the Paystack checkout URL
+  # and the Daily.co room in the device browser. Full in-app WebRTC is a
+  # follow-up (W5.6c).
+  url_launcher: ^6.3.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -19,6 +19,9 @@ import '../features/prescriptions/prescriptions_screen.dart';
 import '../features/results/result_detail_screen.dart';
 import '../features/results/results_screen.dart';
 import '../features/shell/shell_screen.dart';
+import '../features/teleconsult/teleconsult_browse_screen.dart';
+import '../features/teleconsult/teleconsult_join_screen.dart';
+import '../features/teleconsult/teleconsult_list_screen.dart';
 
 final patientRouterProvider = Provider<GoRouter>((ref) {
   final authListenable =
@@ -111,6 +114,29 @@ final patientRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'potential-matches',
             builder: (context, state) => const PotentialMatchesScreen(),
+          ),
+        ],
+      ),
+      // Teleconsult flow — rendered outside the bottom-nav shell so the
+      // full-screen "Find a doctor" and "Join video room" experiences
+      // don't fight with the tabbed layout. The list screen is reachable
+      // from the home screen quick-action card (see home_screen.dart) and
+      // from the "See your consults" action. Still gated by the
+      // `authenticatedReady` state (the top-level redirect above falls
+      // through for non-public paths when the user is fully logged in).
+      GoRoute(
+        path: '/teleconsult',
+        builder: (context, state) => const TeleconsultListScreen(),
+        routes: [
+          GoRoute(
+            path: 'browse',
+            builder: (context, state) => const TeleconsultBrowseScreen(),
+          ),
+          GoRoute(
+            path: ':sessionId/join',
+            builder: (context, state) => TeleconsultJoinScreen(
+              sessionId: state.pathParameters['sessionId']!,
+            ),
           ),
         ],
       ),
