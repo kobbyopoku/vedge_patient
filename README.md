@@ -49,3 +49,4 @@ All secured with a PATIENT-issuer JWT distinct from the staff JWT.
 W5.5 walking skeleton — full auth + claim flow + read-only data screens.
 Booking, prescriptions refill, and push notifications are scaffolded as
 stubs and will land in W5.5b.
+# vedge_patient
