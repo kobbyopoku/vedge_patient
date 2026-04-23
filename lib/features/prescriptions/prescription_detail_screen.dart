@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/prescription.dart';
+import '../care/refill_request_sheet.dart';
 import 'prescriptions_screen.dart';
 
 class PrescriptionDetailScreen extends ConsumerWidget {
@@ -94,15 +95,12 @@ class PrescriptionDetailScreen extends ConsumerWidget {
                 Text(r.instructions!, style: theme.textTheme.bodyMedium),
               ],
               const SizedBox(height: 24),
-              OutlinedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Refill flow — coming soon')),
-                  );
-                },
-                icon: const Icon(Icons.autorenew),
-                label: const Text('Request refill'),
-              ),
+              if (r.isActive)
+                OutlinedButton.icon(
+                  onPressed: () => showRefillRequestSheet(context, rx: r),
+                  icon: const Icon(Icons.autorenew),
+                  label: const Text('Request refill'),
+                ),
               const SizedBox(height: 16),
               Text(
                 'Always take medications as prescribed. If something doesn\'t '

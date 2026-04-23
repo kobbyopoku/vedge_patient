@@ -62,4 +62,33 @@ class PatientDataApi {
           .toList(growable: false);
     });
   }
+
+  /// BACKEND-DEPENDENT — cancel an upcoming appointment. Spec §6.12 wires
+  /// this to replace the legacy "coming soon" toast.
+  Future<void> cancelAppointment(String appointmentId, {String? reason}) {
+    return _unwrap(() async {
+      await _client.dio.post<void>(
+        '$_base/appointments/$appointmentId/cancel',
+        data: reason == null ? null : {'reason': reason},
+      );
+    });
+  }
+
+  /// BACKEND-DEPENDENT — request a refill for a prescription. Spec §6.13
+  /// wires this to replace the legacy "coming soon" toast.
+  Future<void> requestRefill(
+    String prescriptionId, {
+    String? pharmacyId,
+    String? notes,
+  }) {
+    return _unwrap(() async {
+      await _client.dio.post<void>(
+        '$_base/prescriptions/$prescriptionId/refill-request',
+        data: {
+          if (pharmacyId != null) 'pharmacyId': pharmacyId,
+          if (notes != null && notes.isNotEmpty) 'notes': notes,
+        },
+      );
+    });
+  }
 }

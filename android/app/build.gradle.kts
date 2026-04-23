@@ -11,6 +11,10 @@ android {
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
+        // Core library desugaring is required by `flutter_local_notifications`
+        // (Phase E1 visit reminders) — see
+        // https://developer.android.com/studio/write/java8-support
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
@@ -37,6 +41,12 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+}
+
+dependencies {
+    // Required by `flutter_local_notifications` for AlarmManager APIs on
+    // Android < 26.
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
 }
 
 flutter {

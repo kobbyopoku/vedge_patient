@@ -12,15 +12,16 @@ final prescriptionsProvider =
 });
 
 class PrescriptionsScreen extends ConsumerWidget {
-  const PrescriptionsScreen({super.key});
+  const PrescriptionsScreen({this.embedded = false, super.key});
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(prescriptionsProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Prescriptions')),
-      body: async.when(
+    final body = RefreshIndicator(
+      onRefresh: () async => ref.invalidate(prescriptionsProvider),
+      child: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) {
           if (e is NoCurrentLinkException) return const _NoCurrentCard();
@@ -54,6 +55,11 @@ class PrescriptionsScreen extends ConsumerWidget {
         },
       ),
     );
+    if (embedded) return body;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Prescriptions')),
+      body: body,
+    );
   }
 }
 
@@ -85,7 +91,7 @@ class _RxTile extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 10),
       child: Card(
         child: InkWell(
-          onTap: () => context.go('/prescriptions/${rx.id}'),
+          onTap: () => context.push('/care/rx/${rx.id}'),
           borderRadius: BorderRadius.circular(18),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -182,8 +188,8 @@ class _NoCurrentCard extends StatelessWidget {
                 style: theme.textTheme.titleMedium),
             const SizedBox(height: 12),
             FilledButton(
-              onPressed: () => context.go('/me'),
-              child: const Text('Go to Me'),
+              onPressed: () => context.go('/you'),
+              child: const Text('Go to You'),
             ),
           ],
         ),

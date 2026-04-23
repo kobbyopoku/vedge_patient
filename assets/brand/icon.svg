@@ -1,0 +1,33 @@
+<!--
+  Vedge Patient — app icon (patient-only variant).
+
+  Composition (patient):
+    - Cream (#F3ECDF) square, radius 12 (was: ink in the canonical icon)
+    - Ink (#0E2319) lowercase "v" in serif, centred (was: cream)
+    - Clay (#C8553D) accent mark, 12x12 inset 8 from top-right
+      (kept from canonical — pops against the cream and ties the
+      patient mark back to the brand family).
+
+  This INTENTIONALLY diverges from the canonical Vedge icon used by the
+  staff app and landing site. Rationale: the patient app should feel
+  warmer / more human; clay is the brand's warm accent and reads as
+  "consumer" vs the ink-heavy clinical surfaces.
+
+  Regenerate the launcher PNG + Android/iOS icons after editing:
+    magick -background none -size 1024x1024 assets/brand/icon.svg \
+      assets/brand/icon_source.png
+    dart run flutter_launcher_icons
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Vedge for Patients">
+  <rect width="64" height="64" rx="12" fill="#F3ECDF"/>
+  <rect x="44" y="8" width="12" height="12" fill="#C8553D"/>
+  <text
+    x="32"
+    y="50"
+    font-family="Fraunces, Georgia, 'Times New Roman', serif"
+    font-size="48"
+    font-weight="400"
+    fill="#0E2319"
+    text-anchor="middle"
+  >v</text>
+</svg>

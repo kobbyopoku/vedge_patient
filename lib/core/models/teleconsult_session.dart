@@ -90,6 +90,11 @@ class TeleconsultSession {
   final DateTime? endedAt;
   final DateTime? createdAt;
 
+  /// Raw `paymentStatus` from the backend. BACKEND-DEPENDENT — the field is
+  /// optional today and only populated on responses returned after Paystack
+  /// has reconciled. Common values: 'PAID', 'PENDING', 'FAILED', null.
+  final String? paymentStatus;
+
   const TeleconsultSession({
     required this.id,
     required this.organizationId,
@@ -107,6 +112,7 @@ class TeleconsultSession {
     this.startedAt,
     this.endedAt,
     this.createdAt,
+    this.paymentStatus,
   });
 
   factory TeleconsultSession.fromJson(Map<String, dynamic> json) {
@@ -134,8 +140,13 @@ class TeleconsultSession {
       startedAt: parse(json['startedAt']),
       endedAt: parse(json['endedAt']),
       createdAt: parse(json['createdAt']),
+      paymentStatus: json['paymentStatus']?.toString(),
     );
   }
+
+  /// True when the session has been confirmed paid by the backend's Paystack
+  /// reconciliation. Used by the payment-return polling loop.
+  bool get isPaid => paymentStatus?.toUpperCase() == 'PAID';
 
   bool get isPast =>
       status.isTerminal || scheduledEnd.isBefore(DateTime.now());

@@ -55,13 +55,11 @@ class PatientApiClient {
       ),
     );
     if (kDebugMode) {
-      dio.interceptors.add(LogInterceptor(
-        request: false,
-        requestBody: false,
-        responseBody: false,
-        responseHeader: false,
-        error: true,
-      ));
+      // SECURITY P0 (Phase F): the previous LogInterceptor exposed
+      // Authorization + Cookie headers in debug logs. Use a custom
+      // interceptor that redacts sensitive headers and never prints
+      // request/response bodies, only errors.
+      dio.interceptors.add(_RedactingLogInterceptor());
     }
     return dio;
   }
@@ -79,11 +77,12 @@ class PatientApiClient {
   String? get accessToken => _accessToken;
 
   static bool _isPublicPath(String path) {
-    return path.endsWith('/auth/register') ||
-        path.endsWith('/auth/verify-otp') ||
-        path.endsWith('/auth/login') ||
-        path.endsWith('/auth/login-otp') ||
-        path.endsWith('/auth/verify-login-otp') ||
+    // V128 phone-first flow + /refresh. All other /api/patient/** paths
+    // require a patient JWT and go through the Authorization-injection
+    // branch of the interceptor.
+    return path.endsWith('/auth/start') ||
+        path.endsWith('/auth/verify-start') ||
+        path.endsWith('/auth/complete-registration') ||
         path.endsWith('/auth/refresh');
   }
 
@@ -166,3 +165,45 @@ class PatientApiClient {
     }
   }
 }
+
+/// SECURITY P0 — debug-only logger that redacts Authorization, Cookie and
+/// any header containing 'token' or 'secret'. Never prints request or
+/// response bodies. Errors include status + path only — no response payload.
+class _RedactingLogInterceptor extends Interceptor {
+  static const _redacted = '<redacted>';
+  static final _sensitiveHeaders = {
+    'authorization',
+    'cookie',
+    'set-cookie',
+    'x-api-key',
+    'x-csrf-token',
+  };
+
+  Map<String, dynamic> _scrub(Map<String, dynamic> headers) {
+    final out = <String, dynamic>{};
+    headers.forEach((k, v) {
+      final lower = k.toLowerCase();
+      final isSensitive = _sensitiveHeaders.contains(lower) ||
+          lower.contains('token') ||
+          lower.contains('secret');
+      out[k] = isSensitive ? _redacted : v;
+    });
+    return out;
+  }
+
+  @override
+  void onError(DioException err, ErrorInterceptorHandler handler) {
+    final req = err.requestOptions;
+    final status = err.response?.statusCode;
+    debugPrint(
+      '[vedge-api] ERROR ${req.method} ${req.path} '
+      'status=$status type=${err.type.name} '
+      'headers=${_scrub(req.headers)}',
+    );
+    handler.next(err);
+  }
+}
+
+@visibleForTesting
+Map<String, dynamic> redactedHeadersForTest(Map<String, dynamic> headers) =>
+    _RedactingLogInterceptor()._scrub(headers);

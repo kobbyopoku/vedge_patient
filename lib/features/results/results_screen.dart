@@ -13,7 +13,8 @@ final labResultsProvider =
 });
 
 class ResultsScreen extends ConsumerStatefulWidget {
-  const ResultsScreen({super.key});
+  const ResultsScreen({this.embedded = false, super.key});
+  final bool embedded;
 
   @override
   ConsumerState<ResultsScreen> createState() => _ResultsScreenState();
@@ -32,33 +33,39 @@ class _ResultsScreenState extends ConsumerState<ResultsScreen>
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(labResultsProvider);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Lab results'),
-        bottom: TabBar(
+    final body = Column(
+      children: [
+        TabBar(
           controller: _tab,
           tabs: const [
             Tab(text: 'All'),
             Tab(text: 'Flagged'),
           ],
         ),
-      ),
-      body: async.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => _ErrorView(err: err, onRetry: () {
-          ref.invalidate(labResultsProvider);
-        }),
-        data: (results) {
-          final abnormal = results.where((r) => r.isAbnormal).toList();
-          return TabBarView(
-            controller: _tab,
-            children: [
-              _ResultsList(results: results),
-              _ResultsList(results: abnormal),
-            ],
-          );
-        },
-      ),
+        Expanded(
+          child: async.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (err, _) => _ErrorView(err: err, onRetry: () {
+              ref.invalidate(labResultsProvider);
+            }),
+            data: (results) {
+              final abnormal = results.where((r) => r.isAbnormal).toList();
+              return TabBarView(
+                controller: _tab,
+                children: [
+                  _ResultsList(results: results),
+                  _ResultsList(results: abnormal),
+                ],
+              );
+            },
+          ),
+        ),
+      ],
+    );
+    if (widget.embedded) return body;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Lab results')),
+      body: body,
     );
   }
 }
@@ -113,7 +120,7 @@ class _ResultTile extends StatelessWidget {
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
-        onTap: () => context.go('/results/${result.id}'),
+        onTap: () => context.push('/records/result/${result.id}'),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Row(
@@ -224,8 +231,8 @@ class _ErrorView extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
               FilledButton(
-                onPressed: () => context.go('/me'),
-                child: const Text('Go to Me'),
+                onPressed: () => context.go('/you'),
+                child: const Text('Go to You'),
               ),
             ],
           ),

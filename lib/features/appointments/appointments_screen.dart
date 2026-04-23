@@ -13,15 +13,16 @@ final appointmentsProvider =
 });
 
 class AppointmentsScreen extends ConsumerWidget {
-  const AppointmentsScreen({super.key});
+  const AppointmentsScreen({this.embedded = false, super.key});
+  final bool embedded;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final async = ref.watch(appointmentsProvider);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Visits')),
-      body: async.when(
+    final body = RefreshIndicator(
+      onRefresh: () async => ref.invalidate(appointmentsProvider),
+      child: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) {
           if (e is NoCurrentLinkException) {
@@ -51,6 +52,11 @@ class AppointmentsScreen extends ConsumerWidget {
           );
         },
       ),
+    );
+    if (embedded) return body;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Visits')),
+      body: body,
     );
   }
 }
@@ -82,7 +88,7 @@ class _AppointmentTile extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 10),
       child: Card(
         child: InkWell(
-          onTap: () => context.go('/appointments/${appt.id}'),
+          onTap: () => context.push('/care/visit/${appt.id}'),
           borderRadius: BorderRadius.circular(18),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -188,8 +194,8 @@ class _NoCurrentCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             FilledButton(
-              onPressed: () => context.go('/me'),
-              child: const Text('Go to Me'),
+              onPressed: () => context.go('/you'),
+              child: const Text('Go to You'),
             ),
           ],
         ),

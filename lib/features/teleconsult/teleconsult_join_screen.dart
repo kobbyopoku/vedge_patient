@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../core/security/safe_url_launcher.dart';
 
 import '../../core/api/patient_teleconsult_api.dart';
 import '../../core/models/teleconsult_session.dart';
@@ -64,9 +64,7 @@ class _TeleconsultJoinScreenState extends ConsumerState<TeleconsultJoinScreen> {
     if (url == null || url.isEmpty) return;
     setState(() => _launching = true);
     try {
-      final uri = Uri.parse(url);
-      final ok =
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final ok = await launchSafeString(url);
       if (!ok && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Couldn\'t open the video room.')),

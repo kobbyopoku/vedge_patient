@@ -1,57 +1,66 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api/patient_auth_api.dart';
 import '../../core/auth/patient_auth_state.dart';
+import '../../core/telemetry/telemetry_service.dart';
+import '../../theme/spacing.dart';
+import '../../widgets/otp_field.dart';
+import '../../widgets/vedge_app_bar.dart';
+import '../../widgets/vedge_button.dart';
+import 'complete_profile_screen.dart';
 
-enum OtpFlowMode { register, login }
-
+/// Arguments passed from [WelcomeScreen] to [OtpScreen]. V128 phone-first
+/// flow carries just the normalized E.164 phone number — the verify-start
+/// response itself tells us whether we're logging in or completing signup.
 class OtpArgs {
-  final OtpFlowMode mode;
-  final String? accountId; // only used for register flow
-  final String contactType;
-  final String phoneOrEmail;
-
-  const OtpArgs({
-    required this.mode,
-    required this.contactType,
-    required this.phoneOrEmail,
-    this.accountId,
-  });
-
-  const OtpArgs.empty()
-      : mode = OtpFlowMode.login,
-        accountId = null,
-        contactType = 'PHONE',
-        phoneOrEmail = '';
+  const OtpArgs({required this.phone});
+  const OtpArgs.empty() : phone = '';
+  final String phone;
 }
 
+/// Spec §6.4 — enter the 6-digit OTP. Calls POST /verify-start; the result
+/// is one of:
+///   * [VerifyStartExistingAccount] → log the user in (tokens applied to
+///     PatientAuthController, routing takes them to /today).
+///   * [VerifyStartPendingRegistration] → route to
+///     [CompleteProfileScreen] with the short-lived registration JWT.
 class OtpScreen extends ConsumerStatefulWidget {
-  const OtpScreen({super.key, required this.args});
+  const OtpScreen({required this.args, super.key});
   final OtpArgs args;
 
   @override
   ConsumerState<OtpScreen> createState() => _OtpScreenState();
 }
 
-class _OtpScreenState extends ConsumerState<OtpScreen> {
-  static const int _cellCount = 6;
-  late final List<TextEditingController> _cells;
-  late final List<FocusNode> _focusNodes;
+class _OtpScreenState extends ConsumerState<OtpScreen>
+    with WidgetsBindingObserver {
+  final TextEditingController _codeCtrl = TextEditingController();
   bool _submitting = false;
   String? _error;
   int _resendIn = 30;
+  int _resendCount = 0;
   Timer? _timer;
 
   @override
   void initState() {
     super.initState();
-    _cells = List.generate(_cellCount, (_) => TextEditingController());
-    _focusNodes = List.generate(_cellCount, (_) => FocusNode());
+    WidgetsBinding.instance.addObserver(this);
     _startResendTimer();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(telemetryProvider).track('otp_seen');
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _codeCtrl.dispose();
+    _timer?.cancel();
+    super.dispose();
   }
 
   void _startResendTimer() {
@@ -69,149 +78,137 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     });
   }
 
-  @override
-  void dispose() {
-    for (final c in _cells) {
-      c.dispose();
-    }
-    for (final f in _focusNodes) {
-      f.dispose();
-    }
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  String _code() => _cells.map((c) => c.text).join();
-
-  void _onCellChanged(int index, String value) {
-    if (value.isNotEmpty && index < _cellCount - 1) {
-      _focusNodes[index + 1].requestFocus();
-    }
-    if (value.isEmpty && index > 0) {
-      _focusNodes[index - 1].requestFocus();
-    }
-    if (_code().length == _cellCount && !_submitting) {
-      _submit();
-    }
-  }
-
-  Future<void> _submit() async {
-    final code = _code();
-    if (code.length != _cellCount) return;
-
+  Future<void> _onCompleted(String code) async {
+    if (_submitting) return;
     setState(() {
       _submitting = true;
       _error = null;
     });
 
+    final telemetry = ref.read(telemetryProvider);
+    telemetry.track('otp_code_typed');
+
     try {
-      final controller = ref.read(patientAuthControllerProvider.notifier);
       final authApi = ref.read(patientAuthApiProvider);
-
-      final token = widget.args.mode == OtpFlowMode.register
-          ? await authApi.verifyRegisterOtp(
-              accountId: widget.args.accountId!,
-              code: code,
-              contactType: widget.args.contactType,
-            )
-          : await authApi.verifyLoginOtp(
-              phoneOrEmail: widget.args.phoneOrEmail,
-              code: code,
-            );
-
-      await controller.applyTokenResponse(token);
-      // Router redirect will take us from here based on auth state.
-      if (mounted) {
-        // No explicit navigation — the listener in router reacts.
+      final result = await authApi.verifyStart(
+        phone: widget.args.phone,
+        code: code,
+      );
+      switch (result) {
+        case VerifyStartExistingAccount(:final tokens):
+          telemetry.track('otp_verify_existing');
+          await ref
+              .read(patientAuthControllerProvider.notifier)
+              .applyTokenResponse(tokens);
+          // Auth-state listener routes us out of /otp.
+          break;
+        case VerifyStartPendingRegistration(
+            :final registrationToken,
+            :final expiresInSeconds
+          ):
+          telemetry.track('otp_verify_needs_registration');
+          if (!mounted) return;
+          context.pushReplacement(
+            '/complete-profile',
+            extra: CompleteProfileArgs(
+              phone: widget.args.phone,
+              registrationToken: registrationToken,
+              expiresInSeconds: expiresInSeconds,
+            ),
+          );
+          break;
       }
     } catch (e) {
+      if (!mounted) return;
+      final humanized = _humanize(e);
+      telemetry.track('otp_verify_error', {'error': humanized});
       setState(() {
-        _error = _humanize(e);
+        _error = humanized;
         _submitting = false;
-        for (final c in _cells) {
-          c.clear();
-        }
+        _codeCtrl.clear();
       });
-      _focusNodes.first.requestFocus();
     }
   }
 
   Future<void> _resend() async {
-    if (_resendIn > 0) return;
+    if (_resendIn > 0 || _resendCount >= 3) return;
+    final telemetry = ref.read(telemetryProvider);
+    telemetry.track('otp_resend_tapped');
     try {
-      if (widget.args.mode == OtpFlowMode.login) {
-        await ref
-            .read(patientAuthApiProvider)
-            .requestLoginOtp(phoneOrEmail: widget.args.phoneOrEmail);
-      } else {
-        // For register, request a fresh login-otp against the same contact —
-        // the backend's verify-otp endpoint also accepts codes generated here
-        // once the account exists. We fall back to login-otp after register.
-        await ref
-            .read(patientAuthApiProvider)
-            .requestLoginOtp(phoneOrEmail: widget.args.phoneOrEmail);
-      }
+      await ref
+          .read(patientAuthApiProvider)
+          .startPhoneAuth(phone: widget.args.phone);
+      if (!mounted) return;
+      setState(() => _resendCount += 1);
       _startResendTimer();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Code sent.')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Code sent.')),
+      );
     } catch (e) {
+      if (!mounted) return;
       setState(() => _error = _humanize(e));
     }
   }
 
   String _humanize(Object e) {
     final msg = e.toString();
-    if (msg.contains('400') || msg.contains('401')) {
-      return 'That code didn\'t match. Try again.';
+    if (msg.contains('EXPIRED')) {
+      return 'That code expired — tap Resend to get a fresh one.';
     }
-    if (msg.contains('Connection')) {
+    if (msg.contains('400') || msg.contains('401')) {
+      return "That code didn't match. Try again.";
+    }
+    if (msg.contains('429')) {
+      return 'For your security, wait 1 minute before trying again.';
+    }
+    if (msg.contains('Connection') || msg.contains('SocketException')) {
       return 'Network error. Check your connection and try again.';
     }
     return 'Something went wrong. Please try again.';
   }
 
+  void _back() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/welcome');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final sent = widget.args.phoneOrEmail.isNotEmpty
-        ? widget.args.phoneOrEmail
-        : 'your phone';
+    final t = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    final sent =
+        widget.args.phone.isNotEmpty ? widget.args.phone : 'your phone';
 
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (widget.args.mode == OtpFlowMode.register) {
-              context.go('/register');
-            } else {
-              context.go('/login');
-            }
-          },
-        ),
+      appBar: VedgeAppBar(
+        title: 'Check your messages',
+        showBack: true,
+        showProviderContext: false,
+        onBack: _back,
       ),
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 0, 24, 32),
+          padding: const EdgeInsets.fromLTRB(
+            VedgeSpacing.space6,
+            0,
+            VedgeSpacing.space6,
+            VedgeSpacing.space8,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Check your messages', style: theme.textTheme.headlineMedium),
-              const SizedBox(height: 8),
               Text.rich(
                 TextSpan(
-                  style: theme.textTheme.bodyLarge?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+                  style: t.bodyLarge?.copyWith(color: cs.onSurfaceVariant),
                   children: [
                     const TextSpan(text: 'We sent a 6-digit code to '),
                     TextSpan(
                       text: sent,
                       style: TextStyle(
-                        color: theme.colorScheme.onSurface,
+                        color: cs.onSurface,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -219,116 +216,44 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
-              if (_error != null) ...[
-                _ErrorBanner(message: _error!),
-                const SizedBox(height: 16),
-              ],
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  for (int i = 0; i < _cellCount; i++)
-                    _OtpCell(
-                      controller: _cells[i],
-                      focusNode: _focusNodes[i],
-                      onChanged: (v) => _onCellChanged(i, v),
-                    ),
-                ],
+              const SizedBox(height: VedgeSpacing.space8),
+              OtpField(
+                onCompleted: _onCompleted,
+                errorText: _error,
+                isVerifying: _submitting,
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: VedgeSpacing.space6),
               Center(
-                child: _resendIn > 0
+                child: _resendCount >= 3
                     ? Text(
-                        'Resend code in $_resendIn s',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
+                        'Try again in a few minutes',
+                        style: t.bodyMedium?.copyWith(
+                          color: cs.onSurfaceVariant,
                         ),
                       )
-                    : TextButton(
-                        onPressed: _resend,
-                        child: Text(
-                          'Resend code',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.w600,
+                    : _resendIn > 0
+                        ? Text(
+                            'Resend code in $_resendIn s',
+                            style: t.bodyMedium?.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                          )
+                        : VedgeButton(
+                            label: 'Resend code',
+                            variant: VedgeButtonVariant.tertiary,
+                            isFullWidth: false,
+                            onPressed: _resend,
                           ),
-                        ),
-                      ),
               ),
               const Spacer(),
-              if (_submitting)
-                const Center(child: CircularProgressIndicator(strokeWidth: 2.4)),
+              VedgeButton(
+                label: 'Wrong number? Go back',
+                variant: VedgeButtonVariant.tertiary,
+                onPressed: _back,
+              ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _OtpCell extends StatelessWidget {
-  const _OtpCell({
-    required this.controller,
-    required this.focusNode,
-    required this.onChanged,
-  });
-  final TextEditingController controller;
-  final FocusNode focusNode;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 48,
-      height: 64,
-      child: TextField(
-        controller: controller,
-        focusNode: focusNode,
-        keyboardType: TextInputType.number,
-        textAlign: TextAlign.center,
-        maxLength: 1,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.w600,
-            ),
-        decoration: const InputDecoration(
-          counterText: '',
-          contentPadding: EdgeInsets.zero,
-        ),
-        onChanged: onChanged,
-      ),
-    );
-  }
-}
-
-class _ErrorBanner extends StatelessWidget {
-  const _ErrorBanner({required this.message});
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: cs.errorContainer,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cs.error.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.error_outline, color: cs.error, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyMedium
-                  ?.copyWith(color: cs.onErrorContainer),
-            ),
-          ),
-        ],
       ),
     );
   }

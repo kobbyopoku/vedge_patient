@@ -1,82 +1,62 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-/// Bottom-nav shell for the patient app.
-///
-/// Tabs: Home / Results / Appointments / Me. Larger icons than the staff
-/// app since older patients form a larger share of the audience.
-class ShellScreen extends StatelessWidget {
-  const ShellScreen({super.key, required this.child});
-  final Widget child;
+import '../../widgets/vedge_bottom_nav.dart';
 
-  static const _tabs = [
-    _ShellTab(
-      path: '/home',
-      label: 'Home',
-      icon: Icons.home_outlined,
-      activeIcon: Icons.home,
+/// Spec §C1 — five-tab bottom-nav shell using StatefulShellRoute so each
+/// tab keeps its own scroll position + nav stack.
+class ShellScreen extends StatelessWidget {
+  const ShellScreen({required this.shell, super.key});
+
+  final StatefulNavigationShell shell;
+
+  static const _destinations = [
+    VedgeNavDestination(
+      icon: Icons.today_outlined,
+      activeIcon: Icons.today_rounded,
+      label: 'Today',
     ),
-    _ShellTab(
-      path: '/results',
-      label: 'Results',
+    VedgeNavDestination(
       icon: Icons.science_outlined,
-      activeIcon: Icons.science,
+      activeIcon: Icons.science_rounded,
+      label: 'Records',
     ),
-    _ShellTab(
-      path: '/appointments',
-      label: 'Visits',
-      icon: Icons.event_outlined,
-      activeIcon: Icons.event,
+    VedgeNavDestination(
+      icon: Icons.health_and_safety_outlined,
+      activeIcon: Icons.health_and_safety_rounded,
+      label: 'Care',
     ),
-    _ShellTab(
-      path: '/me',
-      label: 'Me',
+    VedgeNavDestination(
+      icon: Icons.people_outline,
+      activeIcon: Icons.people_rounded,
+      label: 'Family',
+    ),
+    VedgeNavDestination(
       icon: Icons.person_outline,
-      activeIcon: Icons.person,
+      activeIcon: Icons.person_rounded,
+      label: 'You',
     ),
   ];
 
-  int _indexFromLocation(String location) {
-    for (var i = 0; i < _tabs.length; i++) {
-      if (location.startsWith(_tabs[i].path)) return i;
-    }
-    return 0;
+  void _onTap(int i) {
+    shell.goBranch(i, initialLocation: i == shell.currentIndex);
+  }
+
+  void _onLongPress(int i) {
+    // Long-press resets that tab's nav stack to its root (iOS pattern).
+    shell.goBranch(i, initialLocation: true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final location = GoRouterState.of(context).matchedLocation;
-    final index = _indexFromLocation(location);
-
     return Scaffold(
-      body: child,
-      bottomNavigationBar: NavigationBar(
-        height: 72,
-        selectedIndex: index,
-        onDestinationSelected: (i) => context.go(_tabs[i].path),
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        destinations: [
-          for (final tab in _tabs)
-            NavigationDestination(
-              icon: Icon(tab.icon, size: 26),
-              selectedIcon: Icon(tab.activeIcon, size: 26),
-              label: tab.label,
-            ),
-        ],
+      body: shell,
+      bottomNavigationBar: VedgeBottomNav(
+        currentIndex: shell.currentIndex,
+        destinations: _destinations,
+        onTap: _onTap,
+        onLongPress: _onLongPress,
       ),
     );
   }
-}
-
-class _ShellTab {
-  final String path;
-  final String label;
-  final IconData icon;
-  final IconData activeIcon;
-  const _ShellTab({
-    required this.path,
-    required this.label,
-    required this.icon,
-    required this.activeIcon,
-  });
 }

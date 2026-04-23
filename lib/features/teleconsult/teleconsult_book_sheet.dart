@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../core/security/safe_url_launcher.dart';
 
 import '../../core/api/patient_teleconsult_api.dart';
 import '../../core/models/availability_slot.dart';
@@ -106,8 +106,7 @@ class _TeleconsultBookSheetState extends ConsumerState<TeleconsultBookSheet> {
       // next list refresh.
       final checkoutUrl = result.paystackCheckoutUrl;
       if (checkoutUrl.isNotEmpty) {
-        final uri = Uri.parse(checkoutUrl);
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        await launchSafeString(checkoutUrl);
       }
 
       if (!mounted) return;

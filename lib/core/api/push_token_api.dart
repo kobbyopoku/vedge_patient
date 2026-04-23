@@ -62,12 +62,17 @@ class PatientPushTokenApi {
     return 'stub_${DateTime.now().millisecondsSinceEpoch}_$bytes';
   }
 
+  /// Upper-case to satisfy the backend's chk_push_platform CHECK
+  /// constraint (V45): platform IN ('IOS','ANDROID','WEB'). The backend
+  /// also treats 'UNKNOWN' as invalid; a fallback device platform maps
+  /// to 'WEB' so the register call still succeeds on exotic hosts
+  /// (emulators, desktop IDEs) rather than being silently rejected.
   String _platformLabel() {
-    if (kIsWeb) return 'web';
+    if (kIsWeb) return 'WEB';
     try {
-      if (Platform.isIOS) return 'ios';
-      if (Platform.isAndroid) return 'android';
+      if (Platform.isIOS) return 'IOS';
+      if (Platform.isAndroid) return 'ANDROID';
     } catch (_) {}
-    return 'unknown';
+    return 'WEB';
   }
 }

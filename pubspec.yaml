@@ -1,5 +1,5 @@
 name: vedge_patient
-description: "Vedge for Patients — consumer-facing health records, results, and appointments."
+description: "Vedge Companion — the calmest, clearest place a patient can hold their health."
 publish_to: "none"
 version: 0.1.0+1
 
@@ -24,8 +24,13 @@ dependencies:
   flutter_secure_storage: ^9.2.2
   shared_preferences: ^2.3.3
 
-  # Fonts (Fraunces + Inter) and icons
-  google_fonts: ^6.2.1
+  # Icons. Fonts (Fraunces + Inter) ship as bundled assets — see the
+  # `flutter.fonts:` block at the bottom of this file. We previously used
+  # google_fonts but it fetches Fraunces/Inter from fonts.gstatic.com at
+  # runtime, which silently fails on devices without general internet
+  # (the patient app's target market is mobile-only / cellular-only,
+  # commonly offline on first launch). Bundling makes the brand render
+  # correctly even with no network.
   cupertino_icons: ^1.0.8
 
   # Date / number formatting
@@ -36,25 +41,78 @@ dependencies:
   # follow-up (W5.6c).
   url_launcher: ^6.3.1
 
+  # OTP autofill on Android via SMS Retriever / native iOS — used by
+  # OtpField (lib/widgets/otp_field.dart). Pre-approved in
+  # tasks/patient-companion-redesign.md §A3.
+  pin_code_fields: ^8.0.1
+
+  # Searchable country picker for PhoneField. Pre-approved in spec §A3.
+  country_picker: ^2.0.27
+
+  # Connectivity stream for OfflineBanner (Phase D). Pre-approved.
+  connectivity_plus: ^6.1.0
+
+  # Local notifications for visit reminders (Phase E1) + the post-find-records
+  # opt-in prompt added in Phase F. Pre-approved.
+  flutter_local_notifications: ^17.2.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
   flutter_launcher_icons: ^0.14.1
+  flutter_native_splash: ^2.4.3
 
-# Regenerate after any change to assets/brand/icon_source.png:
+# Regenerate after any change to assets/brand/icon.svg:
+#   magick -size 1024x1024 xc:none \
+#     -fill "#C8553D" -draw "roundrectangle 0,0 1023,1023 192,192" \
+#     -font "/System/Library/Fonts/Supplemental/Georgia.ttf" \
+#     -fill "#0E2319" -pointsize 768 -gravity center -annotate +0+96 "v" \
+#     assets/brand/icon_source.png
 #   dart run flutter_launcher_icons
-# Source PNG is kept byte-identical across vedge_frontend/public/brand/,
-# vedge_staff/assets/brand/, and vedge_patient/assets/brand/ so the
-# browser tab, the staff app icon, and the patient app icon all match.
+#
+# Patient icon INTENTIONALLY diverges from the canonical Vedge icon used
+# by vedge_frontend + vedge_staff (clay bg + ink "v" instead of ink bg +
+# clay accent + cream "v"). The patient app reads as warmer / more
+# consumer; the clinical surfaces stay on the canonical mark.
 # See vedge_frontend/BRANDING.md for the canonical composition.
 flutter_launcher_icons:
   android: true
   ios: true
   image_path: assets/brand/icon_source.png
   remove_alpha_ios: true
-  adaptive_icon_background: "#0E2319"
+  adaptive_icon_background: "#F3ECDF"
   adaptive_icon_foreground: assets/brand/icon_source.png
+
+# Regenerate after any change to assets/brand/splash_logo*.png:
+#   dart run flutter_native_splash:create
+# Cream background ties into the new launcher icon; on Android 12+ the
+# system uses splash_logo_android12.png (smaller, fits the circular mask)
+# while older Android + iOS show the larger splash_logo.png centered.
+flutter_native_splash:
+  color: "#F3ECDF"
+  image: assets/brand/splash_logo.png
+  android_12:
+    color: "#F3ECDF"
+    image: assets/brand/splash_logo_android12.png
+    icon_background_color: "#F3ECDF"
+  android: true
+  ios: true
+  web: false
+  fullscreen: false
 
 flutter:
   uses-material-design: true
+
+  # Bundled brand fonts (variable-weight TTFs from google/fonts repo).
+  # Both ship as a single variable file each — Flutter maps the
+  # `fontWeight` you set on a TextStyle to the variable `wght` axis.
+  # Licenses live next to the .ttf files (Fraunces-OFL.txt, Inter-OFL.txt)
+  # and ship in the APK as required by the SIL OFL 1.1.
+  fonts:
+    - family: Fraunces
+      fonts:
+        - asset: assets/fonts/Fraunces.ttf
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter.ttf

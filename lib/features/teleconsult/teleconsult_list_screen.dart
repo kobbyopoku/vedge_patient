@@ -14,7 +14,8 @@ final _mySessionsProvider =
 });
 
 class TeleconsultListScreen extends ConsumerStatefulWidget {
-  const TeleconsultListScreen({super.key});
+  const TeleconsultListScreen({this.embedded = false, super.key});
+  final bool embedded;
 
   @override
   ConsumerState<TeleconsultListScreen> createState() =>
@@ -41,23 +42,17 @@ class _TeleconsultListScreenState extends ConsumerState<TeleconsultListScreen>
   Widget build(BuildContext context) {
     final async = ref.watch(_mySessionsProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Teleconsult'),
-        bottom: TabBar(
+    final body = Column(
+      children: [
+        TabBar(
           controller: _tabController,
           tabs: const [
             Tab(text: 'Upcoming'),
             Tab(text: 'Past'),
           ],
         ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push('/teleconsult/browse'),
-        icon: const Icon(Icons.videocam_outlined),
-        label: const Text('Book a consult'),
-      ),
-      body: async.when(
+        Expanded(
+          child: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) {
           if (err is NoCurrentLinkException) {
@@ -94,7 +89,19 @@ class _TeleconsultListScreenState extends ConsumerState<TeleconsultListScreen>
             ),
           );
         },
+          ),
+        ),
+      ],
+    );
+    if (widget.embedded) return body;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Teleconsult')),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () => context.push('/teleconsult/browse'),
+        icon: const Icon(Icons.videocam_outlined),
+        label: const Text('Book a consult'),
       ),
+      body: body,
     );
   }
 

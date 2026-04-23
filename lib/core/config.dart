@@ -2,8 +2,16 @@ import 'package:flutter/foundation.dart';
 
 /// Runtime configuration for vedge_patient.
 ///
-/// Override at build time with:
-///   --dart-define=API_BASE_URL=https://api.vedge.health
+/// Base URL resolution order:
+///   1. `--dart-define=API_BASE_URL=...` (always wins — use for local backend:
+///      `flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8050`)
+///   2. Release builds (Play Store / App Store) → production
+///   3. Debug + profile builds (sideloaded onto your phone, emulator,
+///      `flutter run`) → staging
+///
+/// The explicit `kReleaseMode` guard (not `!kDebugMode`) is deliberate:
+/// profile builds must NOT hit production, otherwise performance-test runs
+/// would mutate live data.
 class VedgePatientConfig {
   const VedgePatientConfig._();
 
@@ -12,12 +20,13 @@ class VedgePatientConfig {
     defaultValue: '',
   );
 
+  static const String _productionBaseUrl = 'https://api.tryvedge.com';
+  static const String _stagingBaseUrl = 'https://staging-api.tryvedge.com';
+
   static String get apiBaseUrl {
     if (_envBaseUrl.isNotEmpty) return _envBaseUrl;
-    // Debug default matches the Spring Boot dev port (vedge-app).
-    if (kDebugMode) return 'http://localhost:8050';
-    // Release build must supply API_BASE_URL via --dart-define.
-    return '';
+    if (kReleaseMode) return _productionBaseUrl;
+    return _stagingBaseUrl;
   }
 
   /// Patient endpoints all live under /api/patient/*.
